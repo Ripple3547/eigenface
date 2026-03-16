@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVD 特征脸 · 交互实验台</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #7c6aff;
+    --accent2: #ff6a9a;
+    --accent3: #6affd4;
+    --text: #e8e8f0;
+    --text-muted: #7878a0;
+    --glow: 0 0 30px rgba(124,106,255,0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,106,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,106,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  h1 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 700;
+    line-height: 1.2;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-size: 15px;
+    font-weight: 300;
+    letter-spacing: 0.3px;
+  }
+
+  /* Step indicator */
+  .steps {
+    display: flex;
+    gap: 0;
+    margin-bottom: 48px;
+  }
+
+  .step {
+    flex: 1;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-right: none;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    background: var(--surface);
+  }
+  .step:last-child { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+  .step:first-child { border-radius: 8px 0 0 8px; }
+
+  .step.active {
+    background: var(--surface2);
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .step-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .step.active .step-title { color: var(--text); }
+
+  /* Panels */
+  .panel {
+    display: none;
+    animation: fadeUp 0.35s ease;
+  }
+  .panel.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  /* Canvas grid */
+  .face-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .face-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .face-item canvas {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    image-rendering: pixelated;
+    width: 64px;
+    height: 64px;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+
+  .face-item canvas:hover { border-color: var(--accent); }
+  .face-item canvas.selected { border-color: var(--accent2); box-shadow: 0 0 12px rgba(255,106,154,0.3); }
+
+  .face-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  /* Slider */
+  .slider-group {
+    margin: 20px 0;
+  }
+
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .slider-label span { font-size: 14px; color: var(--text-muted); }
+  .slider-label strong {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    color: var(--accent);
+  }
+
+  input[type=range] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(124,106,255,0.5);
+    transition: transform 0.15s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+  /* SVD Reconstruction view */
+  .recon-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 700px) {
+    .recon-layout { grid-template-columns: 1fr 1fr; }
+  }
+
+  .recon-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .recon-box canvas {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    image-rendering: pixelated;
+    width: 128px;
+    height: 128px;
+  }
+
+  .recon-box .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Singular value chart */
+  #sv-chart {
+    width: 100%;
+    height: 140px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 12px;
+  }
+
+  /* Info panel */
+  .info-box {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  .info-box strong { color: var(--accent3); }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 36px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+  }
+
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(124,106,255,0.05);
+  }
+
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-text { font-size: 14px; color: var(--text-muted); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: inherit;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #9b8dff; transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  /* Eigenface display */
+  .eigen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .eigen-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .eigen-item canvas {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    image-rendering: pixelated;
+    width: 80px;
+    height: 80px;
+    transition: all 0.2s;
+  }
+
+  .eigen-item canvas:hover { transform: scale(1.05); border-color: var(--accent2); }
+
+  .eigen-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--accent2);
+  }
+
+  .eigen-weight {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  /* Formula display */
+  .formula {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent3);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 16px;
+    margin: 12px 0;
+    letter-spacing: 0.5px;
+  }
+
+  /* Loading */
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 20px 0;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Stat badges */
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .stat-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .stat-key {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* Nav next button */
+  .nav-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+  }
+
+  /* Tooltip */
+  .tooltip-text {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* Error */
+  .error-msg {
+    color: var(--accent2);
+    font-size: 13px;
+    margin-top: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Tab switcher for data source */
+  .tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    gap: 0;
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    margin-bottom: -1px;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="header-label">SVD · Eigenface · Interactive Lab</div>
+    <h1>奇异值分解与特征脸<br>交互实验台</h1>
+    <p class="subtitle">探索矩阵如何"看见"人脸 —— 从像素到特征，从分解到识别</p>
+  </header>
+
+  <!-- Step tabs -->
+  <div class="steps">
+    <div class="step active" onclick="goStep(0)">
+      <div class="step-num">STEP 01</div>
+      <div class="step-title">准备人脸数据</div>
+    </div>
+    <div class="step" onclick="goStep(1)">
+      <div class="step-num">STEP 02</div>
+      <div class="step-title">SVD 分解</div>
+    </div>
+    <div class="step" onclick="goStep(2)">
+      <div class="step-num">STEP 03</div>
+      <div class="step-title">特征脸探索</div>
+    </div>
+    <div class="step" onclick="goStep(3)">
+      <div class="step-num">STEP 04</div>
+      <div class="step-title">低秩重建</div>
+    </div>
+  </div>
+
+  <!-- Panel 0: Data -->
+  <div class="panel active" id="panel-0">
+    <div class="card">
+      <div class="card-title">选择数据来源</div>
+
+      <div class="tab-bar">
+        <div class="tab active" onclick="switchDataTab('preset')">使用预置人脸数据集</div>
+        <div class="tab" onclick="switchDataTab('upload')">上传自己的图片</div>
+      </div>
+
+      <div class="tab-panel active" id="tab-preset">
+        <div class="info-box">
+          点击下方按钮生成 <strong>20 张模拟人脸</strong>（基于参数化人脸模型合成，每次生成略有不同），
+          将构成一个 <strong>64×64 灰度图矩阵组</strong>，用于 SVD 分解演示。
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="generateFaces()">▶ 生成模拟人脸数据集</button>
+          <button class="btn btn-ghost" onclick="generateFaces()">↺ 重新生成</button>
+        </div>
+        <div id="preset-grid" class="face-grid" style="margin-top:20px;"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-upload">
+        <div class="info-box" style="margin-bottom:16px;">
+          上传 <strong>5–20 张人像照片</strong>，系统会自动裁剪为 64×64 灰度图。
+          图片仅在本地浏览器中处理，<strong>不会上传到任何服务器</strong>。
+        </div>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" multiple accept="image/*" onchange="handleUpload(event)">
+          <div class="upload-icon">📁</div>
+          <div class="upload-text">点击或拖拽上传图片（支持 JPG / PNG，可多选）</div>
+        </div>
+        <div id="upload-grid" class="face-grid" style="margin-top:20px;"></div>
+        <div id="upload-error" class="error-msg"></div>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <div class="card-title">当前数据集状态</div>
+      <div class="stats-row">
+        <div class="stat-badge">
+          <div class="stat-value" id="stat-n">0</div>
+          <div class="stat-key">人脸数量</div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-value">64×64</div>
+          <div class="stat-key">图像尺寸</div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-value" id="stat-dim">4096</div>
+          <div class="stat-key">特征维度</div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-value" id="stat-rank">—</div>
+          <div class="stat-key">矩阵秩</div>
+        </div>
+      </div>
+      <p class="tooltip-text">每张 64×64 图像被展开为 4096 维向量，n 张图像组成 4096×n 的矩阵 X，对 X 做 SVD。</p>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-primary" onclick="proceedToSVD()">进行 SVD 分解 →</button>
+    </div>
+  </div>
+
+  <!-- Panel 1: SVD Decomposition -->
+  <div class="panel" id="panel-1">
+    <div class="card">
+      <div class="card-title">SVD 分解过程</div>
+      <div class="formula">X = U · Σ · Vᵀ</div>
+      <div class="info-box">
+        <strong>U</strong> 的每一列是一张"特征脸"（左奇异向量，维度 4096）<br>
+        <strong>Σ</strong> 对角线上是奇异值 σ₁ ≥ σ₂ ≥ … ≥ 0，代表每个特征方向的"重要程度"<br>
+        <strong>Vᵀ</strong> 记录每张人脸在各特征方向上的投影系数
+      </div>
+      <div id="svd-loading" class="loading" style="display:none;">
+        <div class="spinner"></div>
+        <span>正在计算 SVD 分解...</span>
+      </div>
+      <div id="svd-done" style="display:none;">
+        <div class="stats-row" style="margin-top:16px;">
+          <div class="stat-badge">
+            <div class="stat-value" id="sv-count">—</div>
+            <div class="stat-key">非零奇异值</div>
+          </div>
+          <div class="stat-badge">
+            <div class="stat-value" id="sv-top">—</div>
+            <div class="stat-key">σ₁ (最大奇异值)</div>
+          </div>
+          <div class="stat-badge">
+            <div class="stat-value" id="sv-ratio">—</div>
+            <div class="stat-key">前5个解释方差</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="sv-chart-card" style="display:none;">
+      <div class="card-title">奇异值衰减曲线</div>
+      <canvas id="sv-chart"></canvas>
+      <p class="tooltip-text" style="margin-top:8px;">
+        曲线快速下降说明少数几个方向就包含了大部分信息——这正是低秩近似有效的数学基础。
+        <strong style="color:var(--accent);">肘部</strong>之后的奇异值对应的是噪声和细节。
+      </p>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(0)" style="margin-right:10px;">← 返回</button>
+      <button class="btn btn-primary" onclick="goStep(2)">探索特征脸 →</button>
+    </div>
+  </div>
+
+  <!-- Panel 2: Eigenfaces -->
+  <div class="panel" id="panel-2">
+    <div class="card">
+      <div class="card-title">平均脸</div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="recon-box">
+          <canvas id="mean-face-canvas" width="64" height="64"></canvas>
+          <div class="label">μ — 所有人脸的均值</div>
+        </div>
+        <div class="info-box" style="flex:1;min-width:200px;">
+          SVD 分解前需要先减去 <strong>平均脸</strong>，使数据中心化。
+          平均脸捕捉了"一张典型人脸"的共同特征，而特征脸描述的是<strong>与平均脸的偏差方向</strong>。
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">前 N 张特征脸（左奇异向量）</div>
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>显示前 <strong id="ef-k-val">10</strong> 张特征脸</span>
+        </div>
+        <input type="range" min="1" max="20" value="10" id="ef-slider" oninput="updateEigenDisplay()">
+      </div>
+      <div id="eigen-grid" class="eigen-grid"></div>
+      <p class="tooltip-text" style="margin-top:12px;">
+        越靠前的特征脸对应越大的奇异值，包含越多的人脸整体结构（轮廓、明暗分布）。
+        越靠后的特征脸描述的是越细微的局部细节（纹理、边缘）。
+        鼠标悬停可放大查看。
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">选一张人脸，看它的特征脸系数</div>
+      <p class="tooltip-text" style="margin-bottom:12px;">
+        点击下方任意一张人脸，查看它在各特征脸方向上的投影系数 aᵢ，满足：
+      </p>
+      <div class="formula">脸 = 平均脸 + a₁·特征脸₁ + a₂·特征脸₂ + ...</div>
+      <div id="coef-face-grid" class="face-grid"></div>
+      <div id="coef-display" style="display:none;margin-top:16px;">
+        <div class="card-title">投影系数 aᵢ</div>
+        <canvas id="coef-chart" style="width:100%;height:100px;border:1px solid var(--border);border-radius:8px;"></canvas>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(1)" style="margin-right:10px;">← 返回</button>
+      <button class="btn btn-primary" onclick="goStep(3)">低秩重建实验 →</button>
+    </div>
+  </div>
+
+  <!-- Panel 3: Reconstruction -->
+  <div class="panel" id="panel-3">
+    <div class="card">
+      <div class="card-title">低秩重建实验</div>
+      <p class="tooltip-text" style="margin-bottom:16px;">
+        只保留前 k 个奇异值重建图像。k 越小，重建越粗糙，但存储量也越小。
+        这就是 SVD 图像压缩的核心原理。
+      </p>
+
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>保留前</span>
+          <strong id="k-val">5</strong>
+          <span>个奇异值（共 <span id="k-max">—</span> 个）</span>
+        </div>
+        <input type="range" min="1" max="20" value="5" id="k-slider" oninput="updateReconstruction()">
+      </div>
+
+      <div class="stats-row" style="margin-bottom:20px;">
+        <div class="stat-badge">
+          <div class="stat-value" id="recon-ratio">—</div>
+          <div class="stat-key">方差保留率</div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-value" id="recon-compress">—</div>
+          <div class="stat-key">压缩比</div>
+        </div>
+        <div class="stat-badge">
+          <div class="stat-value" id="recon-error">—</div>
+          <div class="stat-key">重建误差</div>
+        </div>
+      </div>
+
+      <div id="recon-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:20px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">累积方差解释比例</div>
+      <canvas id="cumvar-chart" style="width:100%;height:130px;border:1px solid var(--border);border-radius:8px;"></canvas>
+      <div id="cumvar-progress" style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+          <span>当前 k 个奇异值解释的方差</span>
+          <span id="cumvar-pct" style="color:var(--accent);font-family:'JetBrains Mono',monospace;">—</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="cumvar-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <p class="tooltip-text" style="margin-top:8px;">
+        曲线越快趋近 100%，说明信息越集中于前几个奇异值，压缩效果越好。
+      </p>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(2)" style="margin-right:10px;">← 返回特征脸</button>
+      <button class="btn btn-primary" onclick="goStep(0)">↺ 换数据重新实验</button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ============================================================
+// SVD (Golub-Reinsch via power iteration / compact approach)
+// For educational demo: using simplified iterative SVD
+// ============================================================
+
+const IMG_SIZE = 64;
+let faceData = [];        // Array of Float32Array[4096], pixel values 0-1
+let svdResult = null;     // { U, S, Vt, mean }
+let currentMode = 'preset';
+
+// ---------- Navigation ----------
+function goStep(n) {
+  document.querySelectorAll('.step').forEach((s, i) => s.classList.toggle('active', i === n));
+  document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', i === n));
+}
+
+function switchDataTab(tab) {
+  currentMode = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+// ---------- Face Generation (parametric synthetic faces) ----------
+function generateFaces() {
+  faceData = [];
+  const grid = document.getElementById('preset-grid');
+  grid.innerHTML = '';
+
+  for (let f = 0; f < 20; f++) {
+    const pixels = generateSyntheticFace(f);
+    faceData.push(pixels);
+    const canvas = createFaceCanvas(pixels);
+    const item = document.createElement('div');
+    item.className = 'face-item';
+    item.innerHTML = `<div class="face-label">face_${String(f+1).padStart(2,'0')}</div>`;
+    item.insertBefore(canvas, item.firstChild);
+    grid.appendChild(item);
+  }
+
+  updateStats();
+}
+
+function generateSyntheticFace(seed) {
+  const rng = mulberry32(seed * 12345 + 99);
+  const pixels = new Float32Array(IMG_SIZE * IMG_SIZE);
+
+  // Face shape parameters
+  const cx = IMG_SIZE / 2 + (rng() - 0.5) * 6;
+  const cy = IMG_SIZE / 2 + (rng() - 0.5) * 4;
+  const rx = 22 + (rng() - 0.5) * 4;
+  const ry = 28 + (rng() - 0.5) * 4;
+  const skinTone = 0.55 + rng() * 0.3;
+  const bgTone = 0.1 + rng() * 0.1;
+
+  // Eye positions
+  const eyeY = cy - 6 + (rng() - 0.5) * 3;
+  const eyeOffX = 8 + (rng() - 0.5) * 2;
+  const eyeSize = 2.5 + rng() * 1.5;
+
+  // Nose
+  const noseY = cy + 3 + (rng() - 0.5) * 2;
+  const noseW = 3 + rng() * 2;
+
+  // Mouth
+  const mouthY = cy + 12 + (rng() - 0.5) * 3;
+  const mouthW = 7 + (rng() - 0.5) * 3;
+  const smileAmt = (rng() - 0.3) * 0.5;
+
+  for (let y = 0; y < IMG_SIZE; y++) {
+    for (let x = 0; x < IMG_SIZE; x++) {
+      const idx = y * IMG_SIZE + x;
+      const dx = (x - cx) / rx;
+      const dy = (y - cy) / ry;
+      const distFace = dx * dx + dy * dy;
+
+      let val = bgTone;
+
+      // Face oval
+      if (distFace < 1.0) {
+        const edgeFade = Math.max(0, 1 - Math.pow(distFace, 3));
+        const shading = 1 - 0.25 * Math.abs(dx) - 0.1 * Math.max(0, dy);
+        val = skinTone * edgeFade * shading;
+
+        // Hair (top region)
+        if (y < cy - ry * 0.55) {
+          const hairDark = 0.2 + rng() * 0.1;
+          val = val * 0.3 + hairDark * 0.7;
+        }
+      }
+
+      // Eyes
+      const eyeL = Math.sqrt(Math.pow(x - (cx - eyeOffX), 2) + Math.pow(y - eyeY, 2));
+      const eyeR = Math.sqrt(Math.pow(x - (cx + eyeOffX), 2) + Math.pow(y - eyeY, 2));
+      if (eyeL < eyeSize || eyeR < eyeSize) {
+        const t = Math.min(eyeL, eyeR) / eyeSize;
+        val = val * t + 0.1 * (1 - t);
+      }
+
+      // Eyebrows
+      const browL = Math.abs(y - (eyeY - 4)) < 1.5 && Math.abs(x - (cx - eyeOffX)) < 5;
+      const browR = Math.abs(y - (eyeY - 4)) < 1.5 && Math.abs(x - (cx + eyeOffX)) < 5;
+      if (browL || browR) val = Math.min(val, 0.25);
+
+      // Nose
+      const noseDist = Math.sqrt(Math.pow(x - cx, 2) / (noseW * noseW) + Math.pow(y - noseY, 2) / 16);
+      if (noseDist < 1.0 && y > cy) {
+        val *= 0.85 + 0.1 * noseDist;
+      }
+
+      // Mouth
+      const mouthCurve = smileAmt * Math.pow((x - cx) / mouthW, 2);
+      const mouthDist = Math.abs(y - (mouthY + mouthCurve));
+      const mouthMask = Math.abs(x - cx) < mouthW;
+      if (mouthDist < 1.8 && mouthMask) {
+        val = val * (mouthDist / 1.8) + 0.15 * (1 - mouthDist / 1.8);
+      }
+
+      // Tiny noise
+      const nv = (mulberry32(idx * seed + 7)() - 0.5) * 0.03;
+      pixels[idx] = Math.max(0, Math.min(1, val + nv));
+    }
+  }
+  return pixels;
+}
+
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// ---------- Upload Handler ----------
+function handleUpload(event) {
+  const files = Array.from(event.target.files);
+  const grid = document.getElementById('upload-grid');
+  const errEl = document.getElementById('upload-error');
+  grid.innerHTML = '';
+  errEl.textContent = '';
+
+  if (files.length < 3) {
+    errEl.textContent = '⚠ 请至少上传 3 张图片以确保 SVD 效果';
+    return;
+  }
+
+  faceData = [];
+  let loaded = 0;
+
+  files.slice(0, 20).forEach((file, i) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const pixels = imageToGray(img);
+      faceData.push(pixels);
+      const canvas = createFaceCanvas(pixels);
+      const item = document.createElement('div');
+      item.className = 'face-item';
+      item.innerHTML = `<div class="face-label">${file.name.slice(0,8)}</div>`;
+      item.insertBefore(canvas, item.firstChild);
+      grid.appendChild(item);
+      URL.revokeObjectURL(url);
+      loaded++;
+      if (loaded === Math.min(files.length, 20)) updateStats();
+    };
+    img.src = url;
+  });
+}
+
+function imageToGray(img) {
+  const offscreen = document.createElement('canvas');
+  offscreen.width = offscreen.height = IMG_SIZE;
+  const ctx = offscreen.getContext('2d');
+  ctx.drawImage(img, 0, 0, IMG_SIZE, IMG_SIZE);
+  const imageData = ctx.getImageData(0, 0, IMG_SIZE, IMG_SIZE).data;
+  const pixels = new Float32Array(IMG_SIZE * IMG_SIZE);
+  for (let i = 0; i < IMG_SIZE * IMG_SIZE; i++) {
+    pixels[i] = (0.299 * imageData[i*4] + 0.587 * imageData[i*4+1] + 0.114 * imageData[i*4+2]) / 255;
+  }
+  return pixels;
+}
+
+function updateStats() {
+  document.getElementById('stat-n').textContent = faceData.length;
+  document.getElementById('stat-rank').textContent = Math.min(faceData.length, IMG_SIZE * IMG_SIZE);
+}
+
+// ---------- Canvas Utils ----------
+function createFaceCanvas(pixels, size=64) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = IMG_SIZE;
+  renderToCanvas(canvas, pixels);
+  return canvas;
+}
+
+function renderToCanvas(canvas, pixels, normalize=false) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(IMG_SIZE, IMG_SIZE);
+  let min = 0, max = 1;
+  if (normalize) {
+    min = Math.min(...pixels);
+    max = Math.max(...pixels);
+  }
+  const range = max - min || 1;
+  for (let i = 0; i < pixels.length; i++) {
+    const v = Math.round(((pixels[i] - min) / range) * 255);
+    imageData.data[i*4]   = v;
+    imageData.data[i*4+1] = v;
+    imageData.data[i*4+2] = v;
+    imageData.data[i*4+3] = 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ---------- SVD (compact, for small n) ----------
+// We compute SVD of the centered matrix X (dim x n)
+// using the trick: for n << dim, compute VDV' of X'X (n x n)
+// then U = XV / S
+
+function computeSVD() {
+  if (faceData.length < 2) {
+    alert('请先准备至少 2 张人脸数据');
+    return;
+  }
+
+  document.getElementById('svd-loading').style.display = 'flex';
+  document.getElementById('svd-done').style.display = 'none';
+  document.getElementById('sv-chart-card').style.display = 'none';
+
+  setTimeout(() => {
+    const n = faceData.length;
+    const dim = IMG_SIZE * IMG_SIZE;
+
+    // Compute mean face
+    const mean = new Float32Array(dim);
+    for (let f = 0; f < n; f++) {
+      for (let d = 0; d < dim; d++) mean[d] += faceData[f][d];
+    }
+    for (let d = 0; d < dim; d++) mean[d] /= n;
+
+    // Center data: X is dim x n, but we store as n x dim (rows = faces)
+    const X = [];
+    for (let f = 0; f < n; f++) {
+      const row = new Float32Array(dim);
+      for (let d = 0; d < dim; d++) row[d] = faceData[f][d] - mean[d];
+      X.push(row);
+    }
+
+    // Compute C = X * X' (n x n gram matrix)
+    const C = [];
+    for (let i = 0; i < n; i++) {
+      C.push(new Float32Array(n));
+      for (let j = 0; j < n; j++) {
+        let dot = 0;
+        for (let d = 0; d < dim; d++) dot += X[i][d] * X[j][d];
+        C[i][j] = dot;
+      }
+    }
+
+    // Eigendecomposition of C (symmetric, n x n) via Jacobi
+    const { eigenvalues, eigenvectors } = jacobiEigen(C);
+
+    // Sort descending
+    const order = eigenvalues.map((v, i) => i).sort((a, b) => eigenvalues[b] - eigenvalues[a]);
+    const S = order.map(i => Math.sqrt(Math.max(0, eigenvalues[i])));
+    const V = order.map(i => eigenvectors[i]); // V[k] is k-th right singular vector (length n)
+
+    // Compute U: U_k = X' * v_k / sigma_k
+    // X' is dim x n, v_k is n-dim vector
+    const U = [];
+    for (let k = 0; k < n; k++) {
+      if (S[k] < 1e-8) {
+        U.push(new Float32Array(dim));
+        continue;
+      }
+      const uk = new Float32Array(dim);
+      for (let d = 0; d < dim; d++) {
+        let val = 0;
+        for (let f = 0; f < n; f++) val += X[f][d] * V[k][f];
+        uk[d] = val / S[k];
+      }
+      U.push(uk);
+    }
+
+    svdResult = { U, S, V, mean, X, n, dim };
+
+    // Update UI
+    const nonzero = S.filter(s => s > 1e-4).length;
+    const totalVar = S.reduce((a, v) => a + v * v, 0);
+    const top5Var = S.slice(0, Math.min(5, n)).reduce((a, v) => a + v * v, 0);
+
+    document.getElementById('sv-count').textContent = nonzero;
+    document.getElementById('sv-top').textContent = S[0].toFixed(1);
+    document.getElementById('sv-ratio').textContent = (top5Var / totalVar * 100).toFixed(1) + '%';
+    document.getElementById('svd-loading').style.display = 'none';
+    document.getElementById('svd-done').style.display = 'block';
+    document.getElementById('sv-chart-card').style.display = 'block';
+
+    drawSVChart();
+    preparePanel2();
+    preparePanel3();
+  }, 50);
+}
+
+// ---------- Jacobi eigendecomposition (symmetric matrix) ----------
+function jacobiEigen(A) {
+  const n = A.length;
+  const a = A.map(row => Array.from(row));
+  let v = Array.from({length: n}, (_, i) => Array.from({length: n}, (_, j) => i === j ? 1 : 0));
+
+  for (let iter = 0; iter < 200 * n * n; iter++) {
+    let maxVal = 0, p = 0, q = 1;
+    for (let i = 0; i < n; i++) {
+      for (let j = i+1; j < n; j++) {
+        if (Math.abs(a[i][j]) > maxVal) { maxVal = Math.abs(a[i][j]); p = i; q = j; }
+      }
+    }
+    if (maxVal < 1e-10) break;
+
+    const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+    const t = Math.sign(theta) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+    const c = 1 / Math.sqrt(t * t + 1);
+    const s = t * c;
+
+    for (let i = 0; i < n; i++) {
+      const aip = a[i][p], aiq = a[i][q];
+      a[i][p] = c * aip - s * aiq;
+      a[p][i] = a[i][p];
+      a[i][q] = s * aip + c * aiq;
+      a[q][i] = a[i][q];
+      const vip = v[i][p], viq = v[i][q];
+      v[i][p] = c * vip - s * viq;
+      v[i][q] = s * vip + c * viq;
+    }
+    a[p][p] = c*c * a[p][p] + s*s * a[q][q] - 2*s*c * a[p][q];
+    a[q][q] = s*s * a[p][p] + c*c * a[q][q];  // Note: after update
+    // Recompute diagonal properly
+    const app = a[p][p], aqq = a[q][q];
+    a[p][p] = app; a[q][q] = aqq; a[p][q] = 0; a[q][p] = 0;
+  }
+
+  return {
+    eigenvalues: a.map((row, i) => row[i]),
+    eigenvectors: v
+  };
+}
+
+// ---------- Proceed to SVD ----------
+function proceedToSVD() {
+  if (faceData.length < 2) { alert('请先准备人脸数据'); return; }
+  goStep(1);
+  setTimeout(computeSVD, 100);
+}
+
+// ---------- Draw singular value chart ----------
+function drawSVChart() {
+  const canvas = document.getElementById('sv-chart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio || 600;
+  canvas.height = 140 * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+  const W = canvas.offsetWidth, H = 140;
+  const { S } = svdResult;
+  const maxS = S[0];
+  const pad = { l: 40, r: 20, t: 15, b: 30 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Axes
+  ctx.strokeStyle = '#2a2a3e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t);
+  ctx.lineTo(pad.l, pad.t + plotH);
+  ctx.lineTo(pad.l + plotW, pad.t + plotH);
+  ctx.stroke();
+
+  // Bars
+  const barW = plotW / S.length * 0.7;
+  S.forEach((s, i) => {
+    const x = pad.l + (i + 0.5) * plotW / S.length - barW / 2;
+    const h = (s / maxS) * plotH;
+    const y = pad.t + plotH - h;
+    const grad = ctx.createLinearGradient(0, y, 0, y + h);
+    grad.addColorStop(0, '#7c6aff');
+    grad.addColorStop(1, '#ff6a9a44');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, barW, h);
+
+    if (i < 10) {
+      ctx.fillStyle = '#78789a';
+      ctx.font = `${10 * (window.devicePixelRatio > 1 ? 0.9 : 1)}px JetBrains Mono`;
+      ctx.textAlign = 'center';
+      ctx.fillText(i+1, pad.l + (i + 0.5) * plotW / S.length, pad.t + plotH + 18);
+    }
+  });
+
+  // Y label
+  ctx.fillStyle = '#78789a';
+  ctx.font = '10px JetBrains Mono';
+  ctx.textAlign = 'right';
+  ctx.fillText(maxS.toFixed(0), pad.l - 4, pad.t + 8);
+  ctx.fillText('0', pad.l - 4, pad.t + plotH);
+
+  ctx.fillStyle = '#78789a';
+  ctx.textAlign = 'center';
+  ctx.fillText('奇异值索引', pad.l + plotW / 2, H - 2);
+}
+
+// ---------- Panel 2 preparation ----------
+function preparePanel2() {
+  const { U, mean, n } = svdResult;
+
+  // Render mean face
+  const mc = document.getElementById('mean-face-canvas');
+  renderToCanvas(mc, mean, false);
+
+  updateEigenDisplay();
+
+  // Coef face grid
+  const grid = document.getElementById('coef-face-grid');
+  grid.innerHTML = '';
+  faceData.forEach((pixels, fi) => {
+    const canvas = createFaceCanvas(pixels);
+    canvas.addEventListener('click', () => showCoefficients(fi));
+    const item = document.createElement('div');
+    item.className = 'face-item';
+    item.innerHTML = `<div class="face-label">face_${fi+1}</div>`;
+    item.insertBefore(canvas, item.firstChild);
+    grid.appendChild(item);
+  });
+}
+
+function updateEigenDisplay() {
+  const k = parseInt(document.getElementById('ef-slider').value);
+  document.getElementById('ef-k-val').textContent = k;
+  const { U, S } = svdResult;
+  const grid = document.getElementById('eigen-grid');
+  grid.innerHTML = '';
+
+  const totalVar = S.reduce((a, v) => a + v*v, 0);
+
+  for (let i = 0; i < k; i++) {
+    const canvas = createFaceCanvas(U[i]);
+    canvas.style.width = canvas.style.height = '80px';
+    renderToCanvas(canvas, U[i], true);
+
+    const pct = (S[i]*S[i] / totalVar * 100).toFixed(1);
+    const item = document.createElement('div');
+    item.className = 'eigen-item';
+    item.innerHTML = `
+      <div class="eigen-num">特征脸 #${i+1}</div>
+      <div class="eigen-weight">σ=${S[i].toFixed(1)}</div>
+      <div class="eigen-weight">${pct}% 方差</div>
+    `;
+    item.insertBefore(canvas, item.firstChild);
+    grid.appendChild(item);
+  }
+}
+
+function showCoefficients(fi) {
+  // Deselect all
+  document.querySelectorAll('#coef-face-grid canvas').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('#coef-face-grid .face-item')[fi].querySelector('canvas').classList.add('selected');
+
+  const { U, S, mean, X, n } = svdResult;
+  // Coefficients: a_k = <centered_face, U_k>
+  const centered = X[fi];
+  const coeffs = U.map(uk => {
+    let dot = 0;
+    for (let d = 0; d < centered.length; d++) dot += centered[d] * uk[d];
+    return dot;
+  });
+
+  document.getElementById('coef-display').style.display = 'block';
+  drawCoefChart(coeffs);
+}
+
+function drawCoefChart(coeffs) {
+  const canvas = document.getElementById('coef-chart');
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 1);
+  const W = canvas.offsetWidth / 2, H = 100;
+  const n = coeffs.length;
+  ctx.clearRect(0, 0, W, H);
+
+  const maxAbs = Math.max(...coeffs.map(Math.abs), 1);
+  const mid = H / 2;
+  const pad = { l: 8, r: 8 };
+  const bw = (W - pad.l - pad.r) / n * 0.8;
+
+  // Zero line
+  ctx.strokeStyle = '#2a2a3e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, mid);
+  ctx.lineTo(W - pad.r, mid);
+  ctx.stroke();
+
+  coeffs.forEach((c, i) => {
+    const x = pad.l + (i + 0.5) * (W - pad.l - pad.r) / n - bw / 2;
+    const h = (Math.abs(c) / maxAbs) * (H / 2 - 4);
+    const y = c >= 0 ? mid - h : mid;
+    ctx.fillStyle = c >= 0 ? '#7c6aff' : '#ff6a9a';
+    ctx.fillRect(x, y, bw, h);
+  });
+
+  // Labels
+  ctx.fillStyle = '#78789a';
+  ctx.font = '9px JetBrains Mono';
+  ctx.textAlign = 'center';
+  for (let i = 0; i < Math.min(n, 10); i++) {
+    ctx.fillText(i+1, pad.l + (i + 0.5) * (W - pad.l - pad.r) / n, H - 2);
+  }
+}
+
+// ---------- Panel 3 preparation ----------
+function preparePanel3() {
+  const { S, n } = svdResult;
+  const maxK = n;
+  const slider = document.getElementById('k-slider');
+  slider.max = maxK;
+  slider.value = Math.min(5, maxK);
+  document.getElementById('k-max').textContent = maxK;
+
+  // Show a subset of faces to reconstruct
+  const grid = document.getElementById('recon-grid');
+  grid.innerHTML = '';
+  const showN = Math.min(faceData.length, 6);
+  for (let fi = 0; fi < showN; fi++) {
+    const box = document.createElement('div');
+    box.className = 'recon-box';
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = origCanvas.height = IMG_SIZE;
+    renderToCanvas(origCanvas, faceData[fi]);
+    origCanvas.style.width = origCanvas.style.height = '128px';
+
+    const reconCanvas = document.createElement('canvas');
+    reconCanvas.width = reconCanvas.height = IMG_SIZE;
+    reconCanvas.style.width = reconCanvas.style.height = '128px';
+    reconCanvas.id = `recon-canvas-${fi}`;
+
+    box.innerHTML = `<div class="label">原图</div>`;
+    box.appendChild(origCanvas);
+    box.innerHTML += `<div class="label" style="margin-top:8px;color:var(--accent)">重建</div>`;
+    box.appendChild(reconCanvas);
+    grid.appendChild(box);
+  }
+
+  drawCumVarChart();
+  updateReconstruction();
+}
+
+function updateReconstruction() {
+  if (!svdResult) return;
+  const k = parseInt(document.getElementById('k-slider').value);
+  document.getElementById('k-val').textContent = k;
+
+  const { U, S, X, mean, n } = svdResult;
+  const dim = mean.length;
+  const totalVar = S.reduce((a, v) => a + v*v, 0);
+  const kVar = S.slice(0, k).reduce((a, v) => a + v*v, 0);
+  const varPct = (kVar / totalVar * 100).toFixed(1);
+
+  // Compression ratio: original = dim*n floats, compressed = (dim+n)*k + dim
+  const origSize = dim * n;
+  const compSize = (dim + n) * k + dim;
+  const compRatio = (origSize / compSize).toFixed(1);
+
+  document.getElementById('recon-ratio').textContent = varPct + '%';
+  document.getElementById('recon-compress').textContent = compRatio + 'x';
+  document.getElementById('cumvar-pct').textContent = varPct + '%';
+  document.getElementById('cumvar-bar').style.width = varPct + '%';
+
+  // Reconstruct each displayed face
+  const showN = Math.min(faceData.length, 6);
+  let totalErr = 0;
+
+  for (let fi = 0; fi < showN; fi++) {
+    const canvas = document.getElementById(`recon-canvas-${fi}`);
+    if (!canvas) continue;
+
+    // Project X[fi] onto first k eigenvectors, then reconstruct
+    const centered = X[fi];
+    const reconCentered = new Float32Array(dim);
+    for (let kk = 0; kk < k; kk++) {
+      let dot = 0;
+      for (let d = 0; d < dim; d++) dot += centered[d] * U[kk][d];
+      for (let d = 0; d < dim; d++) reconCentered[d] += dot * U[kk][d];
+    }
+
+    const recon = new Float32Array(dim);
+    for (let d = 0; d < dim; d++) recon[d] = reconCentered[d] + mean[d];
+
+    // Error
+    let err = 0;
+    for (let d = 0; d < dim; d++) err += Math.pow(faceData[fi][d] - recon[d], 2);
+    totalErr += Math.sqrt(err / dim);
+
+    renderToCanvas(canvas, recon, false);
+  }
+
+  document.getElementById('recon-error').textContent = (totalErr / showN).toFixed(3);
+  drawCumVarChart(k);
+}
+
+function drawCumVarChart(currentK) {
+  const canvas = document.getElementById('cumvar-chart');
+  if (!svdResult) return;
+  canvas.width = canvas.offsetWidth * 2;
+  canvas.height = 260;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 1);
+  const W = canvas.offsetWidth / 2, H = 130;
+
+  const { S } = svdResult;
+  const totalVar = S.reduce((a, v) => a + v*v, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = { l: 35, r: 15, t: 10, b: 25 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+
+  // Axes
+  ctx.strokeStyle = '#2a2a3e';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t);
+  ctx.lineTo(pad.l, pad.t + plotH);
+  ctx.lineTo(pad.l + plotW, pad.t + plotH);
+  ctx.stroke();
+
+  // Cumulative variance line
+  let cumVar = 0;
+  ctx.beginPath();
+  ctx.strokeStyle = '#6affd4';
+  ctx.lineWidth = 2;
+  S.forEach((s, i) => {
+    cumVar += s * s;
+    const x = pad.l + (i / (S.length - 1)) * plotW;
+    const y = pad.t + plotH - (cumVar / totalVar) * plotH;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Current k marker
+  if (currentK !== undefined) {
+    let cvar = S.slice(0, currentK).reduce((a, v) => a + v*v, 0);
+    const kx = pad.l + ((currentK - 1) / Math.max(1, S.length - 1)) * plotW;
+    const ky = pad.t + plotH - (cvar / totalVar) * plotH;
+    ctx.strokeStyle = '#7c6aff';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(kx, pad.t);
+    ctx.lineTo(kx, pad.t + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#7c6aff';
+    ctx.beginPath();
+    ctx.arc(kx, ky, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Y axis labels
+  ctx.fillStyle = '#78789a';
+  ctx.font = '9px JetBrains Mono';
+  ctx.textAlign = 'right';
+  ['0%', '50%', '100%'].forEach((label, i) => {
+    ctx.fillText(label, pad.l - 4, pad.t + plotH - i * plotH / 2 + 3);
+  });
+
+  ctx.textAlign = 'center';
+  ctx.fillText('k', pad.l + plotW / 2, H - 2);
+}
+
+// Initialize
+generateFaces();
+</script>
+</body>
+</html>
